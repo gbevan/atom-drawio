@@ -1,0 +1,10 @@
+
+"menu": [
+  "label": "Draw.io"
+  "submenu": [
+    {
+      "label": "New Diagram"
+      "command": "atom-drawio:newDiagram"
+    }
+  ]
+]

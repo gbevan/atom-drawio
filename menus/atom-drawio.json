@@ -15,10 +15,19 @@
           "label": "atom-drawio",
           "submenu": [
             {
-              "label": "Toggle",
-              "command": "atom-drawio:toggle"
+              "label": "New Diagram",
+              "command": "atom-drawio:newDiagram"
             }
           ]
+        }
+      ]
+    },
+    {
+      "label": "File",
+      "submenu": [
+        {
+          "label": "New Diagram",
+          "command": "atom-drawio:newDiagram"
         }
       ]
     }
