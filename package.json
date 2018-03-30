@@ -1,0 +1,20 @@
+{
+  "name": "atom-drawio",
+  "main": "./lib/atom-drawio",
+  "version": "0.1.0",
+  "description": "Embed draw.io app in Atom",
+  "keywords": [
+    "atom",
+    "draw.io",
+    "drawio",
+    "diagram",
+    "github"
+  ],
+  "repository": "https://github.com/gbevan/atom-drawio",
+  "license": "MIT",
+  "engines": {
+    "atom": ">=1.0.0 <2.0.0"
+  },
+  "dependencies": {
+  }
+}
