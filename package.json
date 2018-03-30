@@ -10,7 +10,7 @@
     "diagram",
     "github"
   ],
-  "repository": "https://github.com/gbevan/atom-drawio",
+  "repository": "git@github.com:gbevan/atom-drawio.git",
   "license": "MIT",
   "engines": {
     "atom": ">=1.0.0 <2.0.0"
