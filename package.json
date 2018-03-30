@@ -1,7 +1,7 @@
 {
   "name": "atom-drawio",
   "main": "./lib/atom-drawio",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Embed draw.io app in Atom",
   "keywords": [
     "atom",
@@ -15,8 +15,7 @@
   "engines": {
     "atom": ">=1.0.0 <2.0.0"
   },
-  "dependencies": {
-  },
+  "dependencies": {},
   "scripts": {
     "install": "cd drawio && npm install"
   }
