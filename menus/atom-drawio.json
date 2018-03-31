@@ -1,9 +1,15 @@
 {
   "context-menu": {
-    "atom-text-editor": [
+    ".tree-view-root": [
       {
-        "label": "Toggle atom-drawio",
-        "command": "atom-drawio:toggle"
+        "label": "New Drawio Diagram",
+        "command": "atom-drawio:newDiagram"
+      }
+    ],
+    ".tree-view .file": [
+      {
+        "label": "New Drawio Diagram",
+        "command": "atom-drawio:newDiagram"
       }
     ]
   },
@@ -15,7 +21,7 @@
           "label": "atom-drawio",
           "submenu": [
             {
-              "label": "New Diagram",
+              "label": "New Drawio Diagram",
               "command": "atom-drawio:newDiagram"
             }
           ]
@@ -26,7 +32,7 @@
       "label": "File",
       "submenu": [
         {
-          "label": "New Diagram",
+          "label": "New Drawio Diagram",
           "command": "atom-drawio:newDiagram"
         }
       ]

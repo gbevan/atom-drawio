@@ -1,9 +1,9 @@
 
 "menu": [
-  "label": "Draw.io"
+  "label": "Drawio"
   "submenu": [
     {
-      "label": "New Diagram"
+      "label": "New Drawio Diagram"
       "command": "atom-drawio:newDiagram"
     }
   ]
