@@ -1,10 +1,10 @@
-
-"menu": [
-  "label": "Drawio"
-  "submenu": [
-    {
-      "label": "New Drawio Diagram"
-      "command": "atom-drawio:newDiagram"
-    }
-  ]
-]
+#
+# "menu": [
+#   "label": "Drawio"
+#   "submenu": [
+#     {
+#       "label": "New Drawio Diagram"
+#       "command": "atom-drawio:newDiagram"
+#     }
+#   ]
+# ]
