@@ -1,7 +1,7 @@
 {
   "name": "atom-drawio",
   "main": "./lib/atom-drawio",
-  "version": "0.6.0",
+  "version": "1.0.0",
   "description": "Embed draw.io app in Atom",
   "keywords": [
     "atom",
