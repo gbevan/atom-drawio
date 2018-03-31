@@ -13,3 +13,9 @@ and gh-pages/jekyll.
 ## Screenshot
 ![Screenshot](screenshot.jpg)
 Enjoy :-)
+
+## License
+
+The atom-drawio project is released under the [MIT License](LICENSE).
+
+Draw.io itself is released by jpgraph under the [Apache-2.0 License](https://github.com/jgraph/drawio/blob/master/LICENSE)
