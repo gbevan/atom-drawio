@@ -18,6 +18,7 @@
   },
   "dependencies": {},
   "scripts": {
-    "install": "cd drawio && npm install"
+    "build": "cd drawio/etc/build && ant all",
+    "install": "cd drawio/src/main/webapp && npm install"
   }
 }
