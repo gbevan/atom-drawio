@@ -40,6 +40,23 @@ git subtree pull --prefix drawio https://github.com/gbevan/drawio.git D20180402_
 git remote add gbevan-drawio git@github.com:gbevan/drawio.git
 ```
 
+#### Get diff of subtree against remote branch
+```bash
+cd drawio
+git diff-tree -r --name-status gbevan-drawio/D20180402_support_atom
+837953b034d80c38b0f428f2cffffef449441718
+M	src/main/webapp/cache.manifest
+M	src/main/webapp/js/app.min.js
+M	src/main/webapp/js/viewer.min.js
+```
+This still reports changes even after the push to the subtree remote.
+Found this discussion - https://github.com/progit/progit2/issues/571
+```bash
+git diff-tree -r --name-status HEAD:drawio/ gbevan-drawio/D20180402_support_atom
+```
+(changes must have been committed)
+TODO: further testing needed of this above.
+
 #### Push subtree to fork
 To push changes back to the subtree fork:
 ```bash
