@@ -1,7 +1,7 @@
 {
   "name": "atom-drawio",
   "main": "./lib/atom-drawio",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "Package that embeds draw.io diagraming application in the Atom editor",
   "keywords": [
     "atom",
