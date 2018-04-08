@@ -10,6 +10,9 @@ Ideally, draw.io (mxfiles) should be able to be rendered when referenced
 from Markdown files as images.  Also, support needed to render in Github markdown
 and gh-pages/jekyll.
 
+For now use either the 'Export to PNG' button or 'File->Embed->Image' option
+to allow for easy embedding of diagrams in Markdown files.
+
 ## Screenshot
 ![Screenshot](screenshot.jpg)
 Enjoy :-)
