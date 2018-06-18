@@ -54,6 +54,66 @@ var com;
                 		return mxVsdxCodec.vsdxPlaceholder;
                 };
                 
+                mxVsdxCodec.parsererrorNS_$LI$ = function ()
+                {
+            		if (mxVsdxCodec.parsererrorNS == null)
+            		{
+            			mxVsdxCodec.parsererrorNS = "";
+            			
+            			if (window.DOMParser) 
+            			{
+	            			var parser = new DOMParser();
+	            			
+	            			try
+	            			{
+	            				mxVsdxCodec.parsererrorNS = parser.parseFromString('<', 'text/xml').getElementsByTagName("parsererror")[0].namespaceURI;
+	            			}
+	            			catch(e)
+	            			{
+	            				//ignore! IE11 throw an exception on XML syntax error
+	            			}
+            			}
+        			}
+
+            		return mxVsdxCodec.parsererrorNS;
+                };
+                
+                mxVsdxCodec.parseXml = function (xml) 
+                {
+                	try
+                	{
+                		var doc = mxUtils.parseXml(xml);
+                		
+                		if (doc.getElementsByTagNameNS(mxVsdxCodec.parsererrorNS, 'parsererror').length > 0)
+                		{
+                			return null;
+                		}
+                		else
+            			{
+                			return doc;
+            			}
+                	}
+                	catch (e) 
+                	{
+                		//IE11 throw an exception on XML syntax error
+                		return null; 
+                	}
+                };
+                
+                //TODO Optimize this function
+                mxVsdxCodec.decodeUTF16LE = function ( binaryStr ) 
+                {
+                    var cp = "";
+                    for( var i = 0; i < binaryStr.length; i+=2) 
+                    {
+                        cp += String.fromCharCode( 
+                             binaryStr.charCodeAt(i) |
+                            ( binaryStr.charCodeAt(i+1) << 8 )
+                        );
+                    }
+
+                    return cp ;
+                }
                 /**
                  * Parses the input VSDX format and uses the information to populate
                  * the specified graph.
@@ -169,142 +229,173 @@ var com;
 	                    	if (processedFiles == filesCount) 
 	                    	{
 	                    		var dateAfter = new Date();
-	                         //console.log(processedFiles + " File extracted in " + (dateAfter - dateBefore) + "ms");
-	                         allDone();
+		                         //console.log(processedFiles + " File extracted in " + (dateAfter - dateBefore) + "ms");
+		                     	try
+		                    	{
+		                     		allDone();
+		                    	}
+		                    	catch(e)
+		                    	{
+		                    		console.log(e);
+		                    		
+		                    		if (onerror != null) 
+		                    		{
+		                    			onerror();
+		                    		}
+		                    		else
+		                    		{
+		                    			callback("");
+		                    		}
+		                    	}
+
 	                    	}
                     };
                     
                     JSZip.loadAsync(file)                                   
                     .then(function(zip) 
                     {
-                        var dateAfter = new Date();
-                       	//console.log(" (loaded in " + (dateAfter - dateBefore) + "ms)");
-                       	
-                        zip.forEach(function (relativePath, zipEntry) 
-                        {  
-        					var filename = zipEntry.name;
-                        	var name = filename.toLowerCase();
-        					var nameLen = name.length;
-                            if (name.indexOf('.xml') == nameLen - 4 || name.indexOf('.xml.rels') == nameLen - 9) //xml files
-                            {
-                            	filesCount++;
-        	                    zipEntry.async("string").then(function (str) 
-        	                  	{
+                    	if (Object.keys(zip.files).length == 0)
+                    	{
+                    		if (onerror != null)
+                    		{
+                    			onerror();
+                    		}
+                    	}
+                    	else
+                    	{
+	                        var dateAfter = new Date();
+	                       	//console.log(" (loaded in " + (dateAfter - dateBefore) + "ms)");
+	                       	
+	                        zip.forEach(function (relativePath, zipEntry) 
+	                        {  
+	        					var filename = zipEntry.name;
+	                        	var name = filename.toLowerCase();
+	        					var nameLen = name.length;
+	                            if (name.indexOf('.xml') == nameLen - 4 || name.indexOf('.xml.rels') == nameLen - 9) //xml files
+	                            {
+	                            	filesCount++;
+	        	                    zipEntry.async("string").then(function (str) 
+	        	                  	{
         	                    		if (!(str.length === 0)) {
-        	    						//UTF-8 BOM causes exception while parsing, so remove it
-        	    						//TODO is the text encoding will be correct or string must be re-read as UTF-8?
-                                        if ((function (str, searchString, position) {
-                                            if (position === void 0) { position = 0; }
-                                            return str.substr(position, searchString.length) === searchString;
-                                        })(str, "\u00ef\u00bb\u00bf"))
-                                            str = str.substring(3);
-                                        var doc = mxUtils.parseXml(str);
-                                        if (doc == null) { //FIXME TODO find a way to change encoding in javascript
-//                                            var outBytes = out.toByteArray();
-//                                            if (outBytes[1] === 0 && outBytes[3] === 0 && outBytes[5] === 0) {
-//                                                str = out.toString("UTF-16LE");
-//                                                doc = mxUtils.parseXml(str);
-//                                            }
-                                        	//TODO add any other non-standard encoding that may be needed 
-                                        }
-                                        doc.vsdxFileName = filename;
-                                        /* put */ (docData[filename] = doc);
-                                    }
-	        	                    	processedFiles++;
-	
-	        	                    	doneCheck();
-        	                   	});
-                            }
-                            else if (name.indexOf(mxVsdxCodec.vsdxPlaceholder + "/media") === 0)//binary files
-                           	{
-                            	filesCount++;
-                            	if ((function (str, searchString) { var pos = str.length - searchString.length; var lastIndex = str.indexOf(searchString, pos); return lastIndex !== -1 && lastIndex === pos; })(name, ".emf")) {
-                            		if (JSZip.support.uint8array) 
-                            		{
-		                            	zipEntry.async("uint8array").then(function (emfData) 
-		           	                  	{
-	                                        var imageFound = false;
-	                                        var base64Str = "";
-	                                        for (var i = 0; i < emfData.length - 8; i++) {
-	                                            if (_this.isPng(emfData, i) || _this.isJpg(emfData, i)) {
-	                                            	base64Str = com.mxgraph.online.mxBase64.encodeToString(emfData, i);
-	                                                imageFound = true;
-	                                                break;
-	                                            }
+	        	    						//UTF-8 BOM causes exception while parsing, so remove it
+	        	    						//TODO is the text encoding will be correct or string must be re-read as UTF-8?
+	                                        if (str.charCodeAt(0) == 65279)
+                                        	{
+	                                            str = str.substring(1);
+                                        	}
+	                                        
+	                                        var doc = mxVsdxCodec.parseXml(str);
+	                                        
+	                                        if (doc == null) 
+	                                        {
+	                                        	if (str.charCodeAt(1) === 0 && str.charCodeAt(3) === 0 && str.charCodeAt(5) === 0)
+                                        		{
+	                                        		doc = mxVsdxCodec.parseXml(mxVsdxCodec.decodeUTF16LE(str));
+                                        		}
+	                                        	//TODO add any other non-standard encoding that may be needed 
 	                                        }
-	                                        ;
-	                                        if (imageFound) {
-	    	                                    /* put */ (mediaData[filename] = base64Str);
-	                                        }
+	                                        
+	                                        if (doc != null)
+                                        	{
+		                                        doc.vsdxFileName = filename;
+		                                        /* put */ (docData[filename] = doc);
+                                        	}
+	                                    }
+		        	                    	processedFiles++;
 		
-		        	                    	processedFiles++;
+		        	                    	doneCheck();
+	        	                   	});
+	                            }
+	                            else if (name.indexOf(mxVsdxCodec.vsdxPlaceholder + "/media") === 0)//binary files
+	                           	{
+	                            	filesCount++;
+	                            	if ((function (str, searchString) { var pos = str.length - searchString.length; var lastIndex = str.indexOf(searchString, pos); return lastIndex !== -1 && lastIndex === pos; })(name, ".emf")) {
+	                            		if (JSZip.support.uint8array) 
+	                            		{
+			                            	zipEntry.async("uint8array").then(function (emfData) 
+			           	                  	{
+		                                        var imageFound = false;
+		                                        var base64Str = "";
+		                                        for (var i = 0; i < emfData.length - 8; i++) {
+		                                            if (_this.isPng(emfData, i) || _this.isJpg(emfData, i)) {
+		                                            	base64Str = com.mxgraph.online.mxBase64.encodeToString(emfData, i);
+		                                                imageFound = true;
+		                                                break;
+		                                            }
+		                                        }
+		                                        ;
+		                                        if (imageFound) {
+		    	                                    /* put */ (mediaData[filename] = base64Str);
+		                                        }
+			
+			        	                    	processedFiles++;
+		
+			        	                    	doneCheck();
+			           	                   	});
+	                            		}
+	                            	}
+	                            	else if ((function (str, searchString) { var pos = str.length - searchString.length; var lastIndex = str.indexOf(searchString, pos); return lastIndex !== -1 && lastIndex === pos; })(name, ".bmp")) {
+	                            		if (JSZip.support.uint8array) 
+	                            		{
+			                            	zipEntry.async("uint8array").then(function (bmpData) 
+			           	                  	{
+			                            		var bitmap = new BmpDecoder(bmpData);
+			                            		
+			                            		var c = document.createElement("canvas");
+			                            		c.width = bitmap.width;
+			                              	  	c.height = bitmap.height;
+			                            		var ctx = c.getContext("2d");
+			                            		ctx.putImageData(bitmap.imageData, 0, 0);
+			                            		var jpgData = c.toDataURL("image/jpeg");
+	                                            /* put */ (mediaData[filename] = jpgData.substr(23)); //23 is the length of "data:image/jpeg;base64,"
 	
-		        	                    	doneCheck();
-		           	                   	});
-                            		}
-                            	}
-                            	else if ((function (str, searchString) { var pos = str.length - searchString.length; var lastIndex = str.indexOf(searchString, pos); return lastIndex !== -1 && lastIndex === pos; })(name, ".bmp")) {
-                            		if (JSZip.support.uint8array) 
-                            		{
-		                            	zipEntry.async("uint8array").then(function (bmpData) 
+			        	                    	processedFiles++;
+			        	                    	doneCheck();
+			           	                   	});
+	                            		}
+	                            	}
+	                            	else
+	                            	{
+		                            	zipEntry.async("base64").then(function (base64Str) 
 		           	                  	{
-		                            		var bitmap = new BmpDecoder(bmpData);
-		                            		
-		                            		var c = document.createElement("canvas");
-		                            		c.width = bitmap.width;
-		                              	  	c.height = bitmap.height;
-		                            		var ctx = c.getContext("2d");
-		                            		ctx.putImageData(bitmap.imageData, 0, 0);
-		                            		var jpgData = c.toDataURL("image/jpeg");
-                                            /* put */ (mediaData[filename] = jpgData.substr(23)); //23 is the length of "data:image/jpeg;base64,"
-
-		        	                    	processedFiles++;
-		        	                    	doneCheck();
+	//	                                    if ((function (str, searchString) { var pos = str.length - searchString.length; var lastIndex = str.indexOf(searchString, pos); return lastIndex !== -1 && lastIndex === pos; })(name, ".bmp")) {
+	//	                                        try 
+	//	                                        {
+	//	    	                            		//convert BMP files to PNG
+	//		                                    	var bmpImg = new Image();
+	//		                                        
+	//		                                        bmpImg.onload = function() {
+	//		                                            var c = document.createElement("canvas");
+	//		                                            c.width = bmpImg.width;
+	//		                                            c.height = bmpImg.height;
+	//		                                            var ctx = c.getContext("2d");
+	//		                                            ctx.drawImage(bmpImg, 0, 0);
+	//		                                            var jpgData = c.toDataURL("image/jpeg");
+	//		                                            
+	//		                                            /* put */ (mediaData[filename] = jpgData.substr(23)); //23 is the length of "data:image/jpeg;base64,"
+	//		                                            
+	//		                                            processedFiles++;
+	//		                                            doneCheck();
+	//		                                        };
+	//	
+	//		                                        bmpImg.src = "data:image/bmp;base64," + base64Str;
+	//	                                        }
+	//	                                        catch (e) {} //conversion failed. Nothing can be done!
+	//	                                    }
+	//	                                    else 
+	//	                                    {
+			                                    /* put */ (mediaData[filename] = base64Str);
+			                                	
+			        	                    	processedFiles++;
+			        	                    	doneCheck();
+	//	                                    }
 		           	                   	});
-                            		}
-                            	}
-                            	else
-                            	{
-	                            	zipEntry.async("base64").then(function (base64Str) 
-	           	                  	{
-//	                                    if ((function (str, searchString) { var pos = str.length - searchString.length; var lastIndex = str.indexOf(searchString, pos); return lastIndex !== -1 && lastIndex === pos; })(name, ".bmp")) {
-//	                                        try 
-//	                                        {
-//	    	                            		//convert BMP files to PNG
-//		                                    	var bmpImg = new Image();
-//		                                        
-//		                                        bmpImg.onload = function() {
-//		                                            var c = document.createElement("canvas");
-//		                                            c.width = bmpImg.width;
-//		                                            c.height = bmpImg.height;
-//		                                            var ctx = c.getContext("2d");
-//		                                            ctx.drawImage(bmpImg, 0, 0);
-//		                                            var jpgData = c.toDataURL("image/jpeg");
-//		                                            
-//		                                            /* put */ (mediaData[filename] = jpgData.substr(23)); //23 is the length of "data:image/jpeg;base64,"
-//		                                            
-//		                                            processedFiles++;
-//		                                            doneCheck();
-//		                                        };
-//	
-//		                                        bmpImg.src = "data:image/bmp;base64," + base64Str;
-//	                                        }
-//	                                        catch (e) {} //conversion failed. Nothing can be done!
-//	                                    }
-//	                                    else 
-//	                                    {
-		                                    /* put */ (mediaData[filename] = base64Str);
-		                                	
-		        	                    	processedFiles++;
-		        	                    	doneCheck();
-//	                                    }
-	           	                   	});
-                            	}
-                           	}
-                        });
+	                            	}
+	                           	}
+	                        });
+                    	}
                     }, function (e) {
                     		//console.log("Error!" + e.message);
-                    		
                     		if (onerror != null)
                     		{
                     			onerror(e);
@@ -11678,6 +11769,7 @@ com.mxgraph.io.vsdx.mxVsdxConstants.SET_VALUES_$LI$();
 com.mxgraph.io.vsdx.mxPropertiesManager.defaultColors_$LI$();
 com.mxgraph.io.vsdx.mxPropertiesManager.__static_initialize();
 com.mxgraph.io.mxVsdxCodec.vsdxPlaceholder_$LI$();
+com.mxgraph.io.mxVsdxCodec.parsererrorNS_$LI$();
 
 EditorUi.prototype.doImportVisio = function(file, done, onerror)
 {

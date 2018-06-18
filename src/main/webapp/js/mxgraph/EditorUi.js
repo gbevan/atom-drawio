@@ -1323,6 +1323,11 @@ EditorUi.prototype.initClipboard = function()
 /**
  * Initializes the infinite canvas.
  */
+EditorUi.prototype.lazyZoomDelay = 20;
+
+/**
+ * Initializes the infinite canvas.
+ */
 EditorUi.prototype.initCanvas = function()
 {
 	// Initial page layout view, scrollBuffer and timer-based scrolling
@@ -2003,7 +2008,7 @@ EditorUi.prototype.initCanvas = function()
             
             this.cumulativeZoomFactor = 1;
             this.updateZoomTimeout = null;
-        }), 20);
+        }), this.lazyZoomDelay);
 	};
 	
 	mxEvent.addMouseWheelListener(mxUtils.bind(this, function(evt, up)
@@ -2449,8 +2454,9 @@ EditorUi.prototype.resetScrollbars = function()
 			if (graph.pageVisible)
 			{
 				var pad = graph.getPagePadding();
-				graph.container.scrollTop = Math.floor(pad.y - this.editor.initialTopSpacing);
-				graph.container.scrollLeft = Math.floor(Math.min(pad.x, (graph.container.scrollWidth - graph.container.clientWidth) / 2));
+				graph.container.scrollTop = Math.floor(pad.y - this.editor.initialTopSpacing) - 1;
+				graph.container.scrollLeft = Math.floor(Math.min(pad.x,
+					(graph.container.scrollWidth - graph.container.clientWidth) / 2)) - 1;
 
 				// Scrolls graph to visible area
 				var bounds = graph.getGraphBounds();
