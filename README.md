@@ -74,6 +74,12 @@ npm run-script build
 This prepares the drawio build by running `ant all` in `drawio/etc/build` -
 this the `*.min.js` files for drawio.
 
+### Test Locally
+```bash
+apm link
+```
+links the local clone to Atom for testing, prior to release.
+
 ### Release to Atom
 ```bash
 # for a patch release
