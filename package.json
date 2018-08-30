@@ -16,7 +16,9 @@
   "engines": {
     "atom": ">=1.0.0 <2.0.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "lodash": "^4.17.10"
+  },
   "scripts": {
     "build": "cd drawio/etc/build && ant all",
     "install": "cd drawio/src/main/webapp && npm install"
