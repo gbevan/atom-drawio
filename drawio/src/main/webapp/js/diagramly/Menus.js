@@ -399,7 +399,7 @@
 				var filename = (file.getTitle() != null) ? file.getTitle() : editorUi.defaultFilename;
 				editorUi.openLink(window.location.protocol + '//' + window.location.host + '/?create=drawdata&' +
 						((editorUi.mode == App.MODE_DROPBOX) ? 'mode=dropbox&' : '') +
-						'title=' + encodeURIComponent(filename));
+						'title=' + encodeURIComponent(filename), null, true);
 			}
 		});
 
@@ -420,7 +420,7 @@
 			action.isEnabled = isGraphEnabled;
 		}
 		
-		if (isLocalStorage)
+		if (isLocalStorage || mxClient.IS_CHROMEAPP)
 		{
 			var action = editorUi.actions.addAction('showStartScreen', function()
 			{
@@ -459,7 +459,7 @@
 			if (vertices.length > 0)
 			{
 				var dlg = new EditGeometryDialog(editorUi, vertices);
-				editorUi.showDialog(dlg.container, 180, 180, true, true);
+				editorUi.showDialog(dlg.container, 200, 250, true, true);
 				dlg.init();
 			}
 		}, null, null, Editor.ctrlKey + '+Shift+M');
@@ -886,14 +886,15 @@
 
 				this.addMenuItems(menu, ['support', '-'], parent);
 				
-				if (!editorUi.isOffline() && !navigator.standalone && urlParams['embed'] != '1')
+				if (!editorUi.isOffline() && !EditorUi.isElectronApp &&
+					!navigator.standalone && urlParams['embed'] != '1')
 				{
-					this.addMenuItems(menu, ['download'], parent);
+					this.addMenuItems(menu, ['downloadDesktop'], parent);
 				}
 				
-				if (!editorUi.isOfflineApp() && urlParams['embed'] != '1')
+				if (!navigator.standalone && urlParams['embed'] != '1')
 				{
-					this.addMenuItems(menu, ['offline'], parent);
+					this.addMenuItems(menu, ['useOffline'], parent);
 				}
 				
 				this.addMenuItems(menu, ['-', 'about'], parent);
@@ -1713,14 +1714,31 @@
 
 		this.put('theme', new Menu(mxUtils.bind(this, function(menu, parent)
 		{
-			var item = menu.addItem(mxResources.get('kennedy'), null, function()
+			var theme = mxSettings.getUi();
+
+			var item = menu.addItem(mxResources.get('automatic'), null, function()
 			{
 				mxSettings.setUi('');
 				mxSettings.save();
 				editorUi.alert(mxResources.get('restartForChangeRequired'));
 			}, parent);
+			
+			if (theme != 'kennedy' && theme != 'atlas' &&
+				theme != 'dark' && theme != 'min')
+			{
+				menu.addCheckmark(item, Editor.checkmarkImage);
+			}
 
-			if (uiTheme != 'atlas' && uiTheme != 'dark' && uiTheme != 'min')
+			menu.addSeparator(parent);
+			
+			item = menu.addItem(mxResources.get('kennedy'), null, function()
+			{
+				mxSettings.setUi('kennedy');
+				mxSettings.save();
+				editorUi.alert(mxResources.get('restartForChangeRequired'));
+			}, parent);
+
+			if (theme == 'kennedy')
 			{
 				menu.addCheckmark(item, Editor.checkmarkImage);
 			}
@@ -1732,7 +1750,7 @@
 				editorUi.alert(mxResources.get('restartForChangeRequired'));
 			}, parent);
 			
-			if (uiTheme == 'min')
+			if (theme == 'min')
 			{
 				menu.addCheckmark(item, Editor.checkmarkImage);
 			}
@@ -1744,7 +1762,7 @@
 				editorUi.alert(mxResources.get('restartForChangeRequired'));
 			}, parent);
 			
-			if (uiTheme == 'atlas')
+			if (theme == 'atlas')
 			{
 				menu.addCheckmark(item, Editor.checkmarkImage);
 			}
@@ -1756,7 +1774,7 @@
 				editorUi.alert(mxResources.get('restartForChangeRequired'));
 			}, parent);
 			
-			if (uiTheme == 'dark')
+			if (theme == 'dark')
 			{
 				menu.addCheckmark(item, Editor.checkmarkImage);
 			}
@@ -1914,14 +1932,14 @@
 			this.addMenuItems(menu, ['publishLink'], parent);
 		})));
 
-		editorUi.actions.put('offline', new Action(mxResources.get('offline') + '...', function()
+		editorUi.actions.put('useOffline', new Action(mxResources.get('useOffline') + '...', function()
 		{
-			editorUi.openLink('https://www.draw.io/app')
+			editorUi.openLink('https://app.draw.io/')
 		}));
 		
-		editorUi.actions.put('download', new Action(mxResources.get('download') + '...', function()
+		editorUi.actions.put('downloadDesktop', new Action(mxResources.get('downloadDesktop') + '...', function()
 		{
-			editorUi.openLink('https://download.draw.io')
+			editorUi.openLink('https://get.draw.io/')
 		}));
 
 		this.editorUi.actions.addAction('share...', mxUtils.bind(this, function()
@@ -1956,7 +1974,7 @@
 
 		var addInsertItem = function(menu, parent, title, method)
 		{
-			if (method != 'plantUml' || EditorUi.enablePlantUml)
+			if (method != 'plantUml' || (EditorUi.enablePlantUml && !editorUi.isOffline()))
 			{
 				menu.addItem(title, null, mxUtils.bind(this, function()
 				{
@@ -2465,12 +2483,13 @@
 			}));
 		}
 			
-		// Overrides edit menu to add find
+		// Overrides edit menu to add find and editGeometry
 		this.put('edit', new Menu(mxUtils.bind(this, function(menu, parent)
 		{
 			this.addMenuItems(menu, ['undo', 'redo', '-', 'cut', 'copy', 'paste', 'delete', '-', 'duplicate', '-',
 									 'find', '-',
-			                         'editData', 'editTooltip', 'editStyle', '-', 'edit', '-', 'editLink', 'openLink', '-',
+			                         'editData', 'editTooltip', '-', 'editStyle', 'editGeometry', '-',
+			                         'edit', '-', 'editLink', 'openLink', '-',
 			                         'selectVertices', 'selectEdges', 'selectAll', 'selectNone', '-', 'lockUnlock']);
 		})));
 		
@@ -2529,12 +2548,12 @@
 
 			menu.addSeparator(parent);
 			
-			if (urlParams['embed'] != '1' && isLocalStorage)
+			if (urlParams['embed'] != '1' && (isLocalStorage || mxClient.IS_CHROMEAPP))
 			{
 				this.addMenuItems(menu, ['showStartScreen'], parent);
 			}
 
-			if (!editorUi.isOfflineApp() && urlParams['embed'] != '1')
+			if (!editorUi.isOfflineApp() && urlParams['embed'] != '1' && isLocalStorage)
 			{
 				this.addMenuItem(menu, 'plugins', parent);
 			}
@@ -2611,10 +2630,10 @@
 				else
 				{
 					this.addMenuItems(menu, ['-', 'save', 'saveAs', '-', 'rename'], parent);
-					
+
 					if (editorUi.isOfflineApp())
 					{
-						if (!editorUi.isOffline())
+						if (navigator.onLine && urlParams['stealth'] != '1')
 						{
 							this.addMenuItems(menu, ['upload'], parent);
 						}

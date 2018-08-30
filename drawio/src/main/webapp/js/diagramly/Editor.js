@@ -83,10 +83,19 @@
 		'#\n' +
 		'# style: label;image=%image%;whiteSpace=wrap;html=1;rounded=1;fillColor=%fill%;strokeColor=%stroke%;\n' +
 		'#\n' +
+		'## Parent style for nodes with child nodes (placeholders are replaced once).\n' +
+		'#\n' +
+		'# parentstyle: swimlane;whiteSpace=wrap;html=1;childLayout=stackLayout;horizontal=1;horizontalStack=0;resizeParent=1;resizeLast=0;collapsible=1;\n' +
+		'#\n' +
 		'## Uses the given column name as the identity for cells (updates existing cells).\n' +
 		'## Default is no identity (empty value or -).\n' +
 		'#\n' +
 		'# identity: -\n' +
+		'#\n' +
+		'## Uses the given column name as the parent reference for cells. Default is no parent (empty or -).\n' +
+		'## The identity above is used for resolving the reference so it must be specified.\n' +
+		'#\n' +
+		'# parent: -\n' +
 		'#\n' +
 		'## Adds a prefix to the identity of cells to make sure they do not collide with existing cells (whose\n' +
 		'## IDs are numbers from 0..n, sometimes with a GUID prefix in the context of realtime collaboration).\n' +
@@ -165,16 +174,29 @@
 	Editor.shadowOptionEnabled = true;
 
 	/**
+	 * Reference to the config object passed to <configure>.
+	 */
+	Editor.config = null;
+
+	/**
+	 * Reference to the version of the last config object in
+	 * <configure>. If this is different to the last version in
+	 * mxSettings.parse, then the settings are reset.
+	 */
+	Editor.configVersion = null;
+
+	/**
 	 * Global configuration of the Editor
 	 * see https://desk.draw.io/solution/articles/16000058316
 	 * 
 	 * For defaultVertexStyle, defaultEdgeStyle and defaultLibraries, this must be called before
 	 * mxSettings.load via global config variable window.mxLoadSettings = false.
 	 */
-	Editor.configure = function(config)
+	Editor.configure = function(config, untrusted)
 	{
 		if (config != null)
 		{
+			Editor.config = config;
 			Editor.configVersion = config.version;
 			Menus.prototype.defaultFonts = config.defaultFonts || Menus.prototype.defaultFonts;
 			ColorDialog.prototype.presetColors = config.presetColors || ColorDialog.prototype.presetColors;
@@ -260,7 +282,7 @@
 			  	Editor.prototype.fontCss = config.fontCss;
 			}
 			
-			if (config.plugins != null)
+			if (config.plugins != null && !untrusted)
 			{
 				// Required for callback
 				App.initPluginCallback();
@@ -272,6 +294,30 @@
 			}
 		}
 	};
+	
+	/**
+	 * Generates a unique ID of the given length
+	 */
+	Editor.s4 = function()
+	{
+	    return Math.floor((1 + Math.random()) * 0x10000)
+	    	.toString(16)
+	    	.substring(1);
+	};
+
+	/**
+	 * Generates a unique ID of the given length
+	 */
+	Editor.guid = function()
+	{
+	  return Editor.s4() + Editor.s4() + '-' + Editor.s4() + '-' + Editor.s4() + '-' +
+	  	Editor.s4() + '-' + Editor.s4() + Editor.s4() + Editor.s4();
+	};
+
+	/**
+	 * This should not be enabled if reflows are required for math rendering.
+	 */
+	Editor.prototype.useForeignObjectForMath = false;
 
 	/**
 	 * Executes the first step for connecting to Google Drive.
@@ -348,7 +394,14 @@
 					this.graph.setBackgroundImage(null);
 				}
 				
-				mxClient.NO_FO = (this.graph.mathEnabled) ? true : this.originalNoForeignObject;
+				mxClient.NO_FO = ((this.graph.mathEnabled && !this.useForeignObjectForMath)) ?
+					true : this.originalNoForeignObject;
+				
+				this.graph.useCssTransforms = !mxClient.NO_FO &&
+					this.isChromelessView() &&
+					this.graph.isCssTransformsSupported();
+				this.graph.updateCssTransform();
+
 				this.graph.setShadowVisible(node.getAttribute('shadow') == '1', false);
 			}
 	
@@ -555,20 +608,31 @@
 		this.graph.mathEnabled = (urlParams['math'] == '1');
 		this.graph.view.x0 = null;
 		this.graph.view.y0 = null;
-		mxClient.NO_FO = (this.graph.mathEnabled) ? true : this.originalNoForeignObject;
+		mxClient.NO_FO = ((this.graph.mathEnabled && !this.useForeignObjectForMath)) ?
+			true : this.originalNoForeignObject;
+		
+		this.graph.useCssTransforms = !mxClient.NO_FO &&
+			this.isChromelessView() &&
+			this.graph.isCssTransformsSupported();
+		this.graph.updateCssTransform();
+		
 		editorResetGraph.apply(this, arguments);
 	};
 
 	/**
 	 * Math support.
 	 */
-	Editor.prototype.originalNoForeignObject = mxClient.NO_FO;
-
 	var editorUpdateGraphComponents = Editor.prototype.updateGraphComponents;
 	Editor.prototype.updateGraphComponents = function()
 	{
 		editorUpdateGraphComponents.apply(this, arguments);
-		mxClient.NO_FO = (this.graph.mathEnabled && Editor.MathJaxRender != null) ? true : this.originalNoForeignObject;
+		mxClient.NO_FO = ((this.graph.mathEnabled && !this.useForeignObjectForMath) &&
+			Editor.MathJaxRender != null) ? true : this.originalNoForeignObject;
+		
+		this.graph.useCssTransforms = !mxClient.NO_FO &&
+			this.isChromelessView() &&
+			this.graph.isCssTransformsSupported();
+		this.graph.updateCssTransform();
 	};
 		
 	/**
@@ -722,6 +786,26 @@
 			
 			mxSettings.setRecentColors(ColorDialog.recentColors);
 			mxSettings.save();
+		};
+	}
+	
+	// Overrides ID for pages
+	if (window.EditDataDialog)
+	{
+		EditDataDialog.getDisplayIdForCell = function(ui, cell)
+		{
+			var id = null;
+			
+			if (ui.editor.graph.getModel().getParent(cell) != null)
+			{
+				id = cell.getId();
+			}
+			else if (ui.currentPage != null)
+			{
+				id = ui.currentPage.getId();
+			}
+			
+			return id;
 		};
 	}
 
@@ -916,6 +1000,10 @@
 			{fill: '#dae8fc', stroke: '#6c8ebf'}, {fill: '#d5e8d4', stroke: '#82b366'},
 			{fill: '#ffe6cc', stroke: '#d79b00'}, {fill: '#fff2cc', stroke: '#d6b656'},
 			{fill: '#f8cecc', stroke: '#b85450'}, {fill: '#e1d5e7', stroke: '#9673a6'}],
+			[null, {fill: mxConstants.NONE, stroke: '#36393d'},
+			{fill: '#fad7ac', stroke: '#b46504'}, {fill: '#fad9d5', stroke: '#ae4132'},
+			{fill: '#b0e3e6', stroke: '#0e8088'}, {fill: '#b1ddf0', stroke: '#10739e'},
+			{fill: '#d0cee2', stroke: '#56517e'}, {fill: '#bac8d3', stroke: '#23445d'}],
 		    [null,
 			{fill: '#f5f5f5', stroke: '#666666', gradient: '#b3b3b3'},
 			{fill: '#dae8fc', stroke: '#6c8ebf', gradient: '#7ea6e0'},
@@ -945,6 +1033,9 @@
 			}
 			
 			styleFormatPanelInit.apply(this, arguments);
+
+			if (urlParams['properties'] == '1')
+				this.container.appendChild(this.addProperties(this.createPanel(), sstate));
 		};
 
 		/**
@@ -981,6 +1072,250 @@
 			return styleFormatPanelAddStyleOps.apply(this, arguments);
 		};
 
+		/**
+		 * Create Properties Panel
+		 */
+		StyleFormatPanel.prototype.addProperties = function(div, state)
+		{
+			var that = this;
+			var graph = this.editorUi.editor.graph;
+
+			function applyStyleVal(pName, newVal)
+			{
+				graph.getModel().beginUpdate();
+				try
+				{
+					graph.setCellStyles(pName, newVal, graph.getSelectionCells());
+					that.editorUi.fireEvent(new mxEventObject('styleChanged', 'keys', [pName],
+							'values', [newVal], 'cells', graph.getSelectionCells()));
+
+				}
+				finally
+				{
+					graph.getModel().endUpdate();
+				}
+			}
+			
+			function setElementPos(td, elem, adjustHeight)
+			{
+				var pos = mxUtils.getOffset(td, true);
+				elem.style.position = 'absolute';
+				elem.style.left = pos.x + 'px';
+				elem.style.top = pos.y + 'px';
+				elem.style.width = td.offsetWidth + 'px';
+				elem.style.height = (td.offsetHeight - (adjustHeight? 4 : 0)) + 'px';
+				elem.style.zIndex = 5;
+			};
+			
+			function createColorBtn(pName, pValue)
+			{
+				var clrDiv = document.createElement("div");
+				clrDiv.style.width = '32px';
+				clrDiv.style.height = '4px';
+				clrDiv.style.margin = "2px";
+				clrDiv.style.border = "1px solid black";
+				clrDiv.style.backgroundColor = pValue;
+
+				btn = mxUtils.button('', mxUtils.bind(that, function(evt)
+				{
+					this.editorUi.pickColor(pValue, function(color)
+					{
+						clrDiv.style.backgroundColor = color;
+						applyStyleVal(pName, color);
+					});
+					mxEvent.consume(evt);
+				}));
+				
+				btn.style.height = '12px';
+				btn.style.width = '40px';
+				btn.className = 'geColorBtn';
+				
+				btn.appendChild(clrDiv);
+				return btn;
+			};
+			
+			function createCheckbox(pName, pValue)
+			{
+				var input = document.createElement('input');
+				input.type = "checkbox";
+				input.checked = pValue == '1';
+				
+				mxEvent.addListener(input, 'change', function() 
+				{
+					applyStyleVal(pName, input.checked? '1' : '0');
+				});
+				return input;
+			};
+			
+			function createPropertyRow(pName, pDiplayName, pValue, pType, isOdd)
+			{
+				var row = document.createElement('tr');
+				row.className = "propRow" + (isOdd? "Alt" : "");
+				var td = document.createElement('td');
+				td.className = "propRowCell";
+				td.innerHTML = mxUtils.htmlEntities(pDiplayName);
+				row.appendChild(td);
+				td = document.createElement('td');
+				td.className = "propRowCell";
+				
+				if (pType == "color")
+				{
+					td.appendChild(createColorBtn(pName, pValue));
+				}
+				else if (pType == "bool")
+				{
+					td.appendChild(createCheckbox(pName, pValue));
+				}
+				else if (pType.type == "enum")
+				{
+					for (var i = 0; i < pType.options.length; i++)
+					{
+						var op = pType.options[i];
+						
+						if (op.val == pValue)
+						{
+							td.innerHTML = mxUtils.htmlEntities(op.dispName);
+							break;
+						}
+					}
+					
+					mxEvent.addListener(td, 'click', mxUtils.bind(that, function()
+					{
+						var select = document.createElement('select');
+						setElementPos(td, select);
+
+						for (var i = 0; i < pType.options.length; i++)
+						{
+							var op = pType.options[i];
+							var opElem = document.createElement('option');
+							opElem.value = mxUtils.htmlEntities(op.val);
+							opElem.innerHTML = mxUtils.htmlEntities(op.dispName);
+							select.appendChild(opElem);
+						}
+						
+						select.value = mxUtils.htmlEntities(pValue);
+						
+						document.body.appendChild(select);
+						
+						mxEvent.addListener(select, 'blur', function()
+						{
+							document.body.removeChild(select);
+						});
+						
+						mxEvent.addListener(select, 'change', function()
+						{
+							applyStyleVal(pName, select.value);
+							td.innerHTML = mxUtils.htmlEntities(select.value);
+						});
+						select.focus();
+					}));
+				}
+				else
+				{
+					td.innerHTML = mxUtils.htmlEntities(pValue);
+					mxEvent.addListener(td, 'click', mxUtils.bind(that, function()
+					{
+						var input = document.createElement('input');
+						setElementPos(td, input, true);
+						input.value = pValue;
+						input.className = "propEditor";
+						
+						if (pType == "int" || pType == "float")
+						{
+							input.type = "number";
+							input.step = pType == "int"? "1" : "any";
+						}
+						
+						document.body.appendChild(input);
+						mxEvent.addListener(input, 'blur', function(){
+							document.body.removeChild(input);
+						});
+						
+						function setInputVal()
+						{
+							var newVal = pType == "int"? parseInt(input.value) + '' : input.value;
+							applyStyleVal(pName, newVal);
+							td.innerHTML = mxUtils.htmlEntities(newVal);
+						}
+						
+						mxEvent.addListener(input, 'change', setInputVal);
+						mxEvent.addListener(input, 'keypress', function(e)
+						{
+							if (e.keyCode == 13) 
+							{
+								setInputVal();
+								
+								try
+								{
+									document.body.removeChild(input);
+								}
+								catch(e){}
+							}
+						});
+						
+						input.focus();
+					}));
+				}
+				row.appendChild(td);
+				return row;
+			};
+			
+			div.style.position = 'relative';
+			div.style.padding = '0';
+			var grid = document.createElement('table');
+			grid.style.whiteSpace = 'nowrap';
+			grid.style.width = '100%';
+			//create header row
+			var hrow = document.createElement('tr');
+			hrow.className = "propHeader";
+			var th = document.createElement('th');
+			th.className = "propHeaderCell";
+			th.innerHTML = mxResources.get('property', null, 'Property');
+			hrow.appendChild(th);
+			th = document.createElement('th');
+			th.className = "propHeaderCell";
+			th.innerHTML = mxResources.get('value', null, 'Value');
+			hrow.appendChild(th);
+			grid.appendChild(hrow);
+			
+			var isOdd = false;
+			for (var key in state.style)
+			{
+				var pValue = state.style[key];
+				
+				//skip non-common properties (which are	set to empty string)
+				if (pValue == "") continue;
+				
+				var type = "string";
+
+				if (typeof pValue == "string" && pValue.indexOf("#") == 0 && pValue.length == 7)
+				{
+					type = "color";
+				}
+				else if (pValue == '1')
+				{
+					type = 'bool';
+				}
+				else if (parseInt(pValue) == parseFloat(pValue))
+				{
+					type = "int";
+				}
+				else if (isFinite(parseFloat(pValue)))
+				{
+					type = "float";
+				}
+				else if (pValue == 'middle')
+				{
+					type = {type: 'enum', options: [{val: 'middle', dispName: 'Middle'}, {val: 'bottom', dispName: 'Bottom'}, {val: 'top', dispName: 'Top'}]};
+				}
+				grid.appendChild(createPropertyRow(key, key.charAt(0).toUpperCase() + key.substr(1), pValue, type, isOdd));
+				isOdd = !isOdd;
+			}
+			
+			div.appendChild(grid);
+			
+			return div;
+		}		
 		/**
 		 * Creates the buttons for the predefined styles.
 		 */
@@ -1062,6 +1397,10 @@
 								btn.style.backgroundImage = 'linear-gradient(' + colorset['fill'] + ' 0px,' +
 									colorset['gradient'] + ' 100%)';
 							}
+						}
+						else if (colorset['fill'] == mxConstants.NONE)
+						{
+							btn.style.background = 'url(\'' + Dialog.prototype.noColorImage + '\')';
 						}
 						else
 						{					
@@ -1363,6 +1702,57 @@
 	};
 
 	/**
+	 * Safari has problems with math typesetting inside foreignObjects.
+	 */
+	var graphIsCssTransformsSupported = Graph.prototype.isCssTransformsSupported;
+	
+	Graph.prototype.isCssTransformsSupported = function()
+	{
+		// FIXME: Safari only disabled due to mathjax rendering errors
+		return graphIsCssTransformsSupported.apply(this, arguments) && !mxClient.IS_SF;
+	};
+
+	/**
+	 * Adds workaround for math rendering in Chrome.
+	 * 
+	 * Workaround for https://bugs.webkit.org/show_bug.cgi?id=93358 in WebKit
+	 * 
+	 * Adding an absolute position DIV before the SVG seems to mitigate the problem.
+	 */
+	var graphViewValidateBackgroundPage = mxGraphView.prototype.validateBackgroundPage;
+	
+	mxGraphView.prototype.validateBackgroundPage = function()
+	{
+		graphViewValidateBackgroundPage.apply(this, arguments);
+		
+		if (mxClient.IS_GC && this.getDrawPane() != null)
+		{
+			var g = this.getDrawPane().parentNode;
+			
+			if (this.graph.mathEnabled && !mxClient.NO_FO &&
+				(this.webKitForceRepaintNode == null ||
+				this.webKitForceRepaintNode.parentNode == null) &&
+				this.graph.container.firstChild.nodeName == 'svg')
+			{
+				this.webKitForceRepaintNode = document.createElement('div');
+				this.webKitForceRepaintNode.style.cssText = 'position:absolute;';
+				g.ownerSVGElement.parentNode.insertBefore(this.webKitForceRepaintNode, g.ownerSVGElement);
+			}
+			else if (this.webKitForceRepaintNode != null && (!this.graph.mathEnabled ||
+					(this.graph.container.firstChild.nodeName != 'svg' &&
+					this.graph.container.firstChild != this.webKitForceRepaintNode)))
+			{
+				if (this.webKitForceRepaintNode.parentNode != null)
+				{
+					this.webKitForceRepaintNode.parentNode.removeChild(this.webKitForceRepaintNode);
+				}
+				
+				this.webKitForceRepaintNode = null;
+			}
+		}
+	};
+	
+	/**
 	 * Sets default style (used in editor.get/setGraphXml below)
 	 */
 	var graphLoadStylesheet = Graph.prototype.loadStylesheet;
@@ -1373,40 +1763,114 @@
 	};
 
 	/**
-	 * Adds support for data:action/json,array of actions where array of actions
-	 * is a JSON array with each action handled in handleCustomLinkAction below.
+	 * Adds support for data:action/json,{"actions":[actions]} where actions is
+	 * a comma-separated list of JSON objects with the following possible keys:
+	 * 
+	 * "open": string - opens a standard or custom link (including page links)
+	 * "toggle"/"show"/"hide"/"highlight": cellset - toggles, shows, hides or
+	 * highlights the given cells
+	 * "select": cellset - selects the given cells if the graph is editable
+	 * "scroll": cellset - scrolls to the first cell in the given celllset
+	 * If no scroll action is specified, then the first cell of the select
+	 * or highlight action is scrolled to visible (select has precedence).
+	 * A cellset is an array of cell IDs or tags or both, eg.
+	 * {"cells": ["id1", "id2"], "tags": ["tag1", "tag2"]}
+	 * To specify all cells, use "cells": ["*"], to specify all cells with
+	 * a tag, use "tags": [] (empty array).
+	 * 
 	 * An example action is:
 	 * 
 	 * data:action/json,{"actions":[{"toggle": {"cells": ["3", "4"]}}]}
+	 * 
+	 * This toggles the visible state of the cells with ID 3 and 4.
 	 */
 	Graph.prototype.handleCustomLink = function(href)
 	{
 		if (href.substring(0, 17) == 'data:action/json,')
 		{
-    		this.model.beginUpdate();
-    		try
-    		{
-				var action = JSON.parse(href.substring(17));
+			// Some actions are stateless and must be handled before the transaction
+			var action = JSON.parse(href.substring(17));
 
-				if (action.actions != null)
+			if (action.actions != null)
+			{
+				// Executes open actions before starting transaction
+				for (var i = 0; i < action.actions.length; i++)
 				{
-					for (var i = 0; i < action.actions.length; i++)
+					if (action.actions[i].open != null)
 					{
-						this.handleCustomLinkAction(action.actions[i]);
+						if (this.isCustomLink(action.actions[i].open))
+						{
+							if (!this.customLinkClicked(action.actions[i].open))
+							{
+								return;
+							}
+						}
+						else
+						{
+							this.openLink(action.actions[i].open);
+						}
 					}
 				}
-			}
-			catch (e)
-			{
-				if (window.console != null)
-				{
-					console.log('Error in ' + href + ': ' + e);
+
+	    		this.model.beginUpdate();
+	    		try
+	    		{
+					for (var i = 0; i < action.actions.length; i++)
+					{
+						this.handleLinkAction(action.actions[i]);
+					}
 				}
-    		}
-    		finally
-    		{
-    			this.model.endUpdate();
-    		}
+	    		finally
+	    		{
+	    			this.model.endUpdate();
+	    		}
+			}
+		}
+	};
+
+	/**
+	 * Executes the given action if it must be executed inside of a transaction.
+	 */
+	Graph.prototype.handleLinkAction = function(action)
+	{
+		var cells = [];
+		
+		if (action.select != null && this.isEnabled())
+		{
+			cells = this.getCellsForAction(action.select);
+			this.setSelectionCells(cells);
+		}
+
+		if (action.highlight != null)
+		{
+			cells = this.getCellsForAction(action.highlight);
+			this.highlightCells(cells, action.highlight.color,
+				action.highlight.duration, action.highlight.opacity);
+		}
+
+		if (action.toggle != null)
+		{
+			this.toggleCells(this.getCellsForAction(action.toggle));
+		}
+		
+		if (action.show != null)
+		{
+			this.setCellsVisible(this.getCellsForAction(action.show), true);
+		}
+		
+		if (action.hide != null)
+		{
+			this.setCellsVisible(this.getCellsForAction(action.hide), false);
+		}
+
+		if (action.scroll != null)
+		{
+			cells = this.getCellsForAction(action.scroll);
+		}
+		
+		if (cells.length > 0)
+		{
+			this.scrollCellToVisible(cells[0]);
 		}
 	};
 
@@ -1414,26 +1878,149 @@
 	 * Handles each action in the action array of a custom link. This code
 	 * handles toggle actions for cell IDs.
 	 */
-	Graph.prototype.handleCustomLinkAction = function(action)
+	Graph.prototype.getCellsForAction = function(action)
 	{
-		if (action.toggle != null && action.toggle.cells != null)
+		return this.getCellsById(action.cells).concat(
+			this.getCellsForTags(action.tags));
+	};
+	
+	/**
+	 * Returns the cells in the model (or given array) that have all of the
+	 * given tags in their tags property.
+	 */
+	Graph.prototype.getCellsById = function(ids)
+	{
+		var result = [];
+		
+		if (ids != null)
 		{
-			for (var i = 0; i < action.toggle.cells.length; i++)
+			for (var i = 0; i < ids.length; i++)
 			{
-				var cell = this.model.getCell(action.toggle.cells[i]);
-				
-				if (cell != null)
+				if (ids[i] == '*')
 				{
-					this.model.setVisible(cell, !this.model.isVisible(cell))
+					var parent = this.getDefaultParent();
+					
+					result = result.concat(this.model.filterDescendants(function(cell)
+					{
+						return cell != parent;
+					}, parent));
+				}
+				else
+				{
+					var cell = this.model.getCell(ids[i]);
+					
+					if (cell != null)
+					{
+						result.push(cell);
+					}
 				}
 			}
+		}
+		
+		return result;
+	};
+	
+	/**
+	 * Returns the cells in the model (or given array) that have all of the
+	 * given tags in their tags property.
+	 */
+	Graph.prototype.getCellsForTags = function(tagList, cells, propertyName)
+	{
+		var result = [];
+		
+		if (tagList != null)
+		{
+			cells = (cells != null) ? cells : this.model.getDescendants(this.model.getRoot());
+			propertyName = (propertyName != null) ? propertyName : 'tags';
+			
+			for (var i = 0; i < cells.length; i++)
+			{
+				if (this.model.isVertex(cells[i]) || this.model.isEdge(cells[i]))
+				{
+					var tags = (cells[i].value != null && typeof(cells[i].value) == 'object') ?
+						mxUtils.trim(cells[i].value.getAttribute(propertyName) || '') : '';
+					var match = true;
+	
+					if (tags.length > 0)
+					{
+						var tmp = tags.toLowerCase().split(' ');
+						
+						for (var j = 0; j < tagList.length && match; j++)
+						{
+							var tag = mxUtils.trim(tagList[j]).toLowerCase();
+							
+							match = match && (tag.length == 0 || mxUtils.indexOf(tmp, tag) >= 0);
+						}
+					}
+					else
+					{
+						match = tagList.length == 0;
+					}
+					
+					if (match)
+					{
+						result.push(cells[i]);
+					}
+				}
+			}
+		}
+		
+		return result;
+	};
+
+	/**
+	 * Shows or hides the given cells.
+	 */
+	Graph.prototype.toggleCells = function(cells)
+	{
+		this.model.beginUpdate();
+		try
+		{
+			for (var i = 0; i < cells.length; i++)
+			{
+				this.model.setVisible(cells[i], !this.model.isVisible(cells[i]))
+			}
+		}
+		finally
+		{
+			this.model.endUpdate();
+		}
+	};
+	
+	/**
+	 * Shows or hides the given cells.
+	 */
+	Graph.prototype.setCellsVisible = function(cells, visible)
+	{
+		this.model.beginUpdate();
+		try
+		{
+			for (var i = 0; i < cells.length; i++)
+			{
+				this.model.setVisible(cells[i], visible);
+			}
+		}
+		finally
+		{
+			this.model.endUpdate();
 		}
 	};
 	
 	/**
 	 * Highlights the given cell.
 	 */
-	Graph.prototype.highlightCell = function(cell, color, duration)
+	Graph.prototype.highlightCells = function(cells, color, duration, opacity)
+	{
+		for (var i = 0; i < cells.length; i++)
+		{
+			this.highlightCell(cells[i], color, duration, opacity);
+		}
+	};
+	
+	/**
+	 * Highlights the given cell.
+	 */
+	Graph.prototype.highlightCell = function(cell, color, duration, opacity)
 	{
 		color = (color != null) ? color : mxConstants.DEFAULT_VALID_COLOR;
 		duration = (duration != null) ? duration : 1000;
@@ -1443,6 +2030,12 @@
 		{
 			var sw = Math.max(5, mxUtils.getValue(state.style, mxConstants.STYLE_STROKEWIDTH, 1) + 4);
 			var hl = new mxCellHighlight(this, color, sw, false);
+			
+			if (opacity != null)
+			{
+				hl.opacity = opacity;
+			}
+			
 			hl.highlight(state);
 			
 			// Fades out the highlight after a duration
@@ -1639,6 +2232,7 @@
 	mxStencilRegistry.libraries['floorplan'] = [SHAPES_PATH + '/mxFloorplan.js', STENCIL_PATH + '/floorplan.xml'];
 	mxStencilRegistry.libraries['bootstrap'] = [SHAPES_PATH + '/mxBootstrap.js', STENCIL_PATH + '/bootstrap.xml'];
 	mxStencilRegistry.libraries['gmdl'] = [SHAPES_PATH + '/mxGmdl.js', STENCIL_PATH + '/gmdl.xml'];
+	mxStencilRegistry.libraries['gcp2'] = [SHAPES_PATH + '/mxGCP2.js', STENCIL_PATH + '/gcp2.xml'];
 	mxStencilRegistry.libraries['cabinets'] = [SHAPES_PATH + '/mxCabinets.js', STENCIL_PATH + '/cabinets.xml'];
 	mxStencilRegistry.libraries['archimate'] = [SHAPES_PATH + '/mxArchiMate.js'];
 	mxStencilRegistry.libraries['archimate3'] = [SHAPES_PATH + '/mxArchiMate3.js'];
@@ -1646,6 +2240,7 @@
 	mxStencilRegistry.libraries['eip'] = [SHAPES_PATH + '/mxEip.js', STENCIL_PATH + '/eip.xml'];
 	mxStencilRegistry.libraries['networks'] = [SHAPES_PATH + '/mxNetworks.js', STENCIL_PATH + '/networks.xml'];
 	mxStencilRegistry.libraries['aws3d'] = [SHAPES_PATH + '/mxAWS3D.js', STENCIL_PATH + '/aws3d.xml'];
+	mxStencilRegistry.libraries['veeam'] = [STENCIL_PATH + '/veeam/2d.xml', STENCIL_PATH + '/veeam/3d.xml', STENCIL_PATH + '/veeam/veeam.xml'];
 	mxStencilRegistry.libraries['pid2inst'] = [SHAPES_PATH + '/pid2/mxPidInstruments.js'];
 	mxStencilRegistry.libraries['pid2misc'] = [SHAPES_PATH + '/pid2/mxPidMisc.js', STENCIL_PATH + '/pid/misc.xml'];
 	mxStencilRegistry.libraries['pid2valves'] = [SHAPES_PATH + '/pid2/mxPidValves.js'];
@@ -1937,7 +2532,7 @@
 		
 		// Buttons
 		var buttons = document.createElement('div');
-		buttons.style.cssText = 'text-align:right;margin:62px 0 0 0;';
+		buttons.style.cssText = 'text-align:right;margin:48px 0 0 0;';
 		
 		// Overall scale for print-out to account for print borders in dialogs etc
 		function preview(print)
@@ -2037,11 +2632,17 @@
 						
 						pv.renderPage = function(w, h, dx, dy, content, pageNumber)
 						{
+							var prev = mxClient.NO_FO;
+							mxClient.NO_FO = (this.graph.mathEnabled && !this.useForeignObjectForMath) ?
+									true : this.originalNoForeignObject;
+							
 							var result = printPreviewRenderPage.apply(this, arguments);
+
+							mxClient.NO_FO = prev;
 							
 							if (this.graph.mathEnabled)
 							{
-								this.mathEnabled = true;
+								this.mathEnabled = this.mathEnabled || true;
 							}
 							else
 							{
@@ -2181,6 +2782,7 @@
 		
 				doc.writeln('<script type="text/x-mathjax-config">');
 				doc.writeln('MathJax.Hub.Config({');
+				doc.writeln('showMathMenu: false,');
 				doc.writeln('messageStyle: "none",');
 				doc.writeln('jax: ["input/TeX", "input/MathML", "input/AsciiMath", "output/HTML-CSS"],');
 				doc.writeln('extensions: ["tex2jax.js", "mml2jax.js", "asciimath2jax.js"],');
@@ -2328,6 +2930,111 @@
         }
     };
 })();
+
+/**
+ * 
+ */
+var ErrorDialog = function(editorUi, title, message, buttonText, fn, retry, buttonText2, fn2, hide, buttonText3, fn3)
+{
+	hide = (hide != null) ? hide : true;
+	
+	var div = document.createElement('div');
+	div.style.textAlign = 'center';
+
+	if (title != null)
+	{
+		var hd = document.createElement('div');
+		hd.style.padding = '0px';
+		hd.style.margin = '0px';
+		hd.style.fontSize = '18px';
+		hd.style.paddingBottom = '16px';
+		hd.style.marginBottom = '16px';
+		hd.style.borderBottom = '1px solid #c0c0c0';
+		hd.style.color = 'gray';
+		mxUtils.write(hd, title);
+		div.appendChild(hd);
+	}
+
+	var p2 = document.createElement('div');
+	p2.style.padding = '6px';
+	p2.innerHTML = message;
+	div.appendChild(p2);
+	
+	var btns = document.createElement('div');
+	btns.style.marginTop = '16px';
+	btns.style.textAlign = 'center';
+	
+	if (retry != null)
+	{
+		var retryBtn = mxUtils.button(mxResources.get('tryAgain'), function()
+		{
+			editorUi.hideDialog();
+			retry();
+		});
+		retryBtn.className = 'geBtn';
+		btns.appendChild(retryBtn);
+		
+		btns.style.textAlign = 'center';
+	}
+	
+	if (buttonText3 != null)
+	{
+		var btn3 = mxUtils.button(buttonText3, function()
+		{
+			if (fn3 != null)
+			{
+				fn3();
+			}
+		});
+		
+		btn3.className = 'geBtn';
+		btns.appendChild(btn3);
+	}
+	
+	var btn = mxUtils.button(buttonText, function()
+	{
+		if (hide)
+		{
+			editorUi.hideDialog();
+		}
+		
+		if (fn != null)
+		{
+			fn();
+		}
+	});
+	
+	btn.className = 'geBtn';
+	btns.appendChild(btn);
+
+	if (buttonText2 != null)
+	{
+		var mainBtn = mxUtils.button(buttonText2, function()
+		{
+			if (hide)
+			{
+				editorUi.hideDialog();
+			}
+			
+			if (fn2 != null)
+			{
+				fn2();
+			}
+		});
+		
+		mainBtn.className = 'geBtn gePrimaryBtn';
+		btns.appendChild(mainBtn);
+	}
+
+	this.init = function()
+	{
+		btn.focus();
+	};
+	
+	div.appendChild(btns);
+
+	this.container = div;
+};
 
 // Extends codec for ChangePageSetup
 (function()
