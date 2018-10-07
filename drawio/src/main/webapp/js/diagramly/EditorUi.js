@@ -9645,17 +9645,31 @@
       		{
       			bg = null;
       		}
-          var svgRoot = graph.getSvg(bg, null, null, null, null, true);
-          svgRoot.setAttribute('content', data.xml);
-          parent.postMessage(JSON.stringify({
-            event: 'atomSVGRes',
-            title: data.title,
-            svg: '<?xml version="1.0" encoding="UTF-8"?>\n' +
-      				'<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n' +
-              mxUtils.getXml(svgRoot)
-          }),
-          '*');
-          data = this.getFileData(true);
+
+          (function(self, parent, data, graph) {
+            self.getEmbeddedSvg(
+              data.xml,
+              graph,
+              null,
+              true,
+              mxUtils.bind(self, function(svg) {
+                graph.setEnabled(true);
+                self.spinner.stop();
+
+                parent.postMessage(JSON.stringify({
+                  event: 'atomSVGRes',
+                  title: data.title,
+                  svg: '<?xml version="1.0" encoding="UTF-8"?>\n' +
+            				'<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n' +
+                    svg
+                }),
+                '*');
+                data = this.getFileData(true);
+                self.setFileData(data.xml);
+              })
+            );
+          })(this, parent, data, this.editor.graph);
+          return;
 				}
 				else
 				{
