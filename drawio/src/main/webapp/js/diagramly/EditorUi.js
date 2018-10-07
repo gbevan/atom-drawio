@@ -9584,6 +9584,11 @@
 					autosave = data.autosave == 1;
 					this.hideDialog();
 
+          // Don't load the file again here, as this causes drawio to try to
+          // later save the file via the browser, instead we let atom-drawio-view.js
+          // handle the save.
+          //this.openLocalFile(data.xml, data.title, false);
+
 					if (data.modified != null && urlParams['modified'] == null)
 					{
 						urlParams['modified'] = data.modified;
@@ -9632,10 +9637,25 @@
 						data = data.xml;
 					}
 				}
-				else if (data.action == 'save')
+				else if (data.action == 'atomSVG')
 				{
-					this.actions.get('save').funct(false);
-					data = this.getFileData(true);
+          var graph = this.editor.graph;
+          var bg = graph.background;
+      		if (bg == mxConstants.NONE)
+      		{
+      			bg = null;
+      		}
+          var svgRoot = graph.getSvg(bg, null, null, null, null, true);
+          svgRoot.setAttribute('content', data.xml);
+          parent.postMessage(JSON.stringify({
+            event: 'atomSVGRes',
+            title: data.title,
+            svg: '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      				'<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n' +
+              mxUtils.getXml(svgRoot)
+          }),
+          '*');
+          data = this.getFileData(true);
 				}
 				else
 				{

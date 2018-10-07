@@ -91,3 +91,6 @@ apm publish minor
 # for a major release
 apm publish major
 ```
+
+### test link to svg
+![test svg](./test.svg)
