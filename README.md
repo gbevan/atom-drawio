@@ -5,10 +5,13 @@ Create and edit your draw.io diagrams directly from within the Atom editor.
 This is an early release - please feel free to contribute and improve this
 package.
 
-atom-drawio now creates and edits SVG files (by leveraging the draw.io feature
-of embedding the draw.io document in the image) directly, so you can reference
+atom-drawio now creates and edits SVG files directly (by leveraging the draw.io feature
+of embedding the draw.io document in the image), so you can reference
 these images from markdown, e.g. README.md on your projects and they should
 render.
+
+## Example Link to SVG
+![test svg](./test.svg)
 
 ## Screenshot
 ![Screenshot](screenshot.jpg)
@@ -88,6 +91,3 @@ apm publish minor
 # for a major release
 apm publish major
 ```
-
-### test link to svg
-![test svg](./test.svg)
