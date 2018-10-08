@@ -1,17 +1,14 @@
-# Package to provide embedded Draw.io diagram editting support in Atom
+# Package to provide embedded Draw.io diagram editing support in Atom
 
 Create and edit your draw.io diagrams directly from within the Atom editor.
 
 This is an early release - please feel free to contribute and improve this
 package.
 
-Note:
-Ideally, draw.io (mxfiles) should be able to be rendered when referenced
-from Markdown files as images.  Also, support needed to render in Github markdown
-and gh-pages/jekyll.
-
-For now use either the 'Export to PNG' button or 'File->Embed->Image' option
-to allow for easy embedding of diagrams in Markdown files.
+atom-drawio now creates and edits SVG files (by leveraging the draw.io feature
+of embedding the draw.io document in the image) directly, so you can reference
+these images from markdown, e.g. README.md on your projects and they should
+render.
 
 ## Screenshot
 ![Screenshot](screenshot.jpg)
