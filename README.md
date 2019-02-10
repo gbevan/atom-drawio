@@ -12,6 +12,7 @@ render.
 
 ## Example Link to SVG
 ![test svg](./test.svg)
+(above cannot be viewed via atom.io website, instead view in github [here](https://github.com/gbevan/atom-drawio))
 
 ## Screenshot
 ![Screenshot](screenshot.jpg)
