@@ -1,5 +1,7 @@
 # Package to provide embedded Draw.io diagram editing support in Atom
 
+**2022-11-21 Project archived as no longer using Atom due to it being discontinued by GitHub...**
+
 Create and edit your draw.io diagrams directly from within the Atom editor.
 
 This is an early release - please feel free to contribute and improve this
